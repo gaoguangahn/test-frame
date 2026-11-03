@@ -1,0 +1,22 @@
+{
+  "rules": [
+    {
+      "text": "添加到主屏幕",
+      "action": {
+        "type": "back"
+      }
+    },
+    {
+      "text": "同意并继续",
+      "action": {
+        "type": "click"
+      }
+    },
+    {
+      "text_regex": "^仅(?:在)?使用期间允许$",
+      "action": {
+        "type": "click"
+      }
+    }
+  ]
+}

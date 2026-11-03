@@ -1,0 +1,103 @@
+buffers {
+  size_kb: 30720
+  fill_policy: RING_BUFFER
+}
+buffers {
+  size_kb: 15360
+  fill_policy: RING_BUFFER
+}
+data_sources {
+  config {
+    name: "linux.process_stats"
+    target_buffer: 1
+    process_stats_config {
+      scan_all_processes_on_start: true
+    }
+  }
+}
+data_sources {
+  config {
+    name: "android.surfaceflinger.frametimeline"
+  }
+}
+data_sources {
+  config {
+    name: "linux.sys_stats"
+    sys_stats_config {
+      meminfo_period_ms: 250
+      meminfo_counters: MEMINFO_CMA_FREE
+      meminfo_counters: MEMINFO_MEM_AVAILABLE
+      meminfo_counters: MEMINFO_MEM_FREE
+      stat_period_ms: 250
+      stat_counters: STAT_CPU_TIMES
+      stat_counters: STAT_FORK_COUNT
+    }
+  }
+}
+data_sources {
+  config {
+    name: "linux.ftrace"
+    ftrace_config {
+      disable_generic_events: false
+      ftrace_events: "power/cpu_frequency_limits"
+      ftrace_events: "power/suspend_resume"
+      ftrace_events: "power/cpu_frequency"
+      ftrace_events: "power/cpu_idle"
+      ftrace_events: "power/gpu_frequency"
+      ftrace_events: "sched/sched_switch"
+      ftrace_events: "sched/sched_blocked_reason"
+      ftrace_events: "sched/sched_wakeup"
+      ftrace_events: "sched/sched_wakeup_new"
+      ftrace_events: "sched/sched_waking"
+      ftrace_events: "sched/sched_process_exit"
+      ftrace_events: "sched/sched_process_free"
+      ftrace_events: "task/task_newtask"
+      ftrace_events: "task/task_rename"
+      ftrace_events: "sched/sched_qos"
+      ftrace_events: "sched/sched_vip_queue_op"
+      ftrace_events: "sched/sched_vip_sched"
+      ftrace_events: "dma_fence"
+      ftrace_events: "kgsl/kgsl_reclaim_process"
+      ftrace_events: "f2fs/f2fs_sync_file_enter"
+      ftrace_events: "f2fs/f2fs_sync_file_exit"
+      ftrace_events: "block/block_rq_issue"
+      ftrace_events: "block/block_rq_complete"
+      ftrace_events: "f2fs/f2fs_readpage"
+      ftrace_events: "f2fs/f2fs_readpages"
+      ftrace_events: "f2fs/f2fs_sync_fs"
+      ftrace_events: "block/block_bio_remap"
+      ftrace_events: "block/block_rq_insert"
+      ftrace_events: "erofs/erofs_readpage"
+      ftrace_events: "erofs/erofs_readpages"
+      ftrace_events: "android_fs/android_fs_dataread_start"
+      ftrace_events: "android_fs/android_fs_dataread_end"
+      ftrace_events: "android_fs/android_fs_datawrite_start"
+      ftrace_events: "psi/psi_group"
+      ftrace_events: "f2fs/f2fs_dataread_start"
+      ftrace_events: "f2fs/f2fs_dataread_end"
+      ftrace_events: "f2fs/f2fs_readfolio"
+      atrace_categories: "gfx"
+      atrace_categories: "view"
+      atrace_categories: "wm"
+      atrace_categories: "am"
+      atrace_categories: "pm"
+      atrace_categories: "ss"
+      atrace_categories: "power"
+      atrace_categories: "binder_lock"
+      atrace_categories: "input"
+      atrace_categories: "binder_driver"
+      atrace_categories: "dalvik"
+      atrace_categories: "res"
+      atrace_categories: "aidl"
+      atrace_apps: "com.hihonor.android.launcher"
+      buffer_size_kb: 4096
+      symbolize_ksyms: true
+      atrace_apps: "com.youzuo.countdown"
+    }
+  }
+}
+duration_ms: 600000
+write_into_file: true
+file_write_period_ms: 200
+max_file_size_bytes: 150000000000
+flush_period_ms: 3000

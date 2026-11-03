@@ -1,0 +1,48 @@
+[project]
+name = "exfw"
+version = "0.1.0"
+description = "A Python Test Framework based on pytest"
+readme = "README.md"
+authors = [
+  { name = "g00031637", email = "gaoguanghan@honor.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "adbutils>=2.12",
+    "console-ctrl>=0.1",
+    "lxml>=6.0",
+    "metric-parser",
+    "numpy>=2.0",
+    "opencv-python>=4.13",
+    "openpyxl>=3.1",
+    "pyyaml>=6.0",
+    "requests>=2.33",
+    "uiautomator2>=3.5",
+    "pytest>=9.1.1",
+    "perfetto>=0.58.2",
+]
+
+[dependency-groups]
+dev = [
+    "weditor>=0.7.3",
+    "setuptools<81",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.10,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+# 默认使用国内镜像源，避免部分环境访问 PyPI 失败。
+index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+
+[tool.uv.extra-build-variables]
+# weditor 的历史 sdist 在 Windows GBK 环境下构建元数据可能报编码/构建错误。
+weditor = { PYTHONUTF8 = "1" }
+
+[tool.uv.build-backend]
+module-name = "exfw"
+
+[tool.uv.sources]
+metric-parser = { path = "vendor/metric_parser-2.0.8-py3-none-any.whl" }
+

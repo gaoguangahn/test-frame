@@ -1,0 +1,187 @@
+{
+  "rules": [
+    {
+      "text": "短信验证码登录",
+      "action": {
+        "type": "back"
+      }
+    },
+    {
+      "text": "其他登录方式",
+      "action": {
+        "type": "back"
+      }
+    },
+    {
+      "text": "其他方式登录",
+      "action": {
+        "type": "back"
+      }
+    },
+    {
+      "text": "更多登录方式",
+      "action": {
+        "type": "back"
+      }
+    },
+    {
+      "text": "请输入手机号",
+      "action": {
+        "type": "back"
+      }
+    },
+    {
+      "text": "快速验证",
+      "action": {
+        "type": "back"
+      }
+    },
+    {
+      "text": "添加到主屏幕",
+      "action": {
+        "type": "back"
+      }
+    },
+    {
+      "text": "我已阅读并同意",
+      "action": {
+        "type": "back"
+      }
+    },
+    {
+      "text": "您已阅读并同意",
+      "action": {
+        "type": "back"
+      }
+    },
+    {
+      "text": "忽略此版本的更新",
+      "action": {
+        "type": "back"
+      }
+    },
+    {
+      "text": "登录注册解锁更多精彩内容",
+      "action": {
+        "type": "back"
+      }
+    },
+    {
+      "text": "发现抖音朋友",
+      "action": {
+        "type": "click",
+        "target": {
+          "text": "拒绝"
+        }
+      }
+    },
+    {
+      "text": "发现新版本",
+      "action": {
+        "type": "click",
+        "target": {
+          "description": "取消"
+        }
+      }
+    },
+    {
+      "text_regex": "^跳转至(?:第三方应用或详情页面|详情页面或第三方应用)$",
+      "action": {
+        "type": "click",
+        "target": {
+          "text": "关闭"
+        }
+      }
+    },
+    {
+      "text": "同意并继续",
+      "action": {
+        "type": "click"
+      }
+    },
+    {
+      "text_regex": "^跳过(?:广告|\\s*\\d+s?|\\s*\\(\\d+\\))?$",
+      "action": {
+        "type": "click"
+      }
+    },
+    {
+      "text": "我知道了",
+      "action": {
+        "type": "click"
+      }
+    },
+    {
+      "text": "以后再说",
+      "action": {
+        "type": "click"
+      }
+    },
+    {
+      "text": "禁止",
+      "action": {
+        "type": "click"
+      }
+    },
+    {
+      "text": "始终允许",
+      "action": {
+        "type": "click"
+      }
+    },
+    {
+      "text_regex": "^仅(?:在)?使用期间允许$",
+      "action": {
+        "type": "click"
+      }
+    },
+    {
+      "text_regex": "^暂不(?:开启|需要|升级)$",
+      "action": {
+        "type": "click"
+      }
+    },
+    {
+      "text": "放弃权益",
+      "action": {
+        "type": "click"
+      }
+    },
+    {
+      "text_regex": "^不再(?:提示|提醒)$",
+      "action": {
+        "type": "click"
+      }
+    },
+    {
+      "text": "我再想想",
+      "action": {
+        "type": "click"
+      }
+    },
+    {
+      "text": "残忍拒绝",
+      "action": {
+        "type": "click"
+      }
+    },
+    {
+      "text": "不允许",
+      "action": {
+        "type": "click"
+      }
+    },
+    {
+      "text": "同意",
+      "action": {
+        "type": "click"
+      }
+    },
+    {
+      "text": "暂不需要，稍后解锁",
+      "action": {
+        "type": "click"
+      }
+    }
+  ]
+}

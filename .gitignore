@@ -1,0 +1,83 @@
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python cache / bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.uv-cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+
+# Python build outputs
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# Virtual environments / local interpreters
+.venv/
+venv/
+env/
+ENV/
+python310/
+
+# Coverage / test reports
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+
+# Local environment / secrets
+.env
+.env.*
+*.local
+
+# Runtime logs
+*.log
+
+# EXFW generated artifacts
+outputs/
+output/
+artifacts/
+reports/
+tmp/
+temp/
+bvl/
+
+# Generated report files
+*.xlsx
+*.xlsm
+
+# Large trace artifacts
+*.pftrace
+
+# Local Claude/session files
+.claude/
+
+# Local scratch scripts
+/test.py
+/outputs
+
+# uv local lock file (team members may use different indexes / permissions)
+uv.lock
+
+# Local/customer test scripts; keep framework code under src/ as the shared part
+tests/
+
+# Backup of the original sandbox-owned Git directory
+/.git-sandbox-backup/
