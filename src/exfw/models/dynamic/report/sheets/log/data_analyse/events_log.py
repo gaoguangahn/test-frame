@@ -402,7 +402,7 @@ def _get_scene(
     matched_case: dict[str, Any] | None,
     log_timestamp: float,
 ) -> str:
-    """获取 Scene：优先使用匹配 trace 的描述，失败再回退到 result.json step。"""
+    """获取 Scene：优先使用匹配 trace 的描述，失败再回退到 session 用例 step。"""
 
     trace_scene = _get_trace_scene(trace_record)
     if trace_scene != "unknown":
@@ -421,7 +421,7 @@ def _get_trace_scene(trace_record: dict[str, Any] | None) -> str:
 
 
 def _get_result_case(matched_case: dict[str, Any] | None, fallback_case: Any) -> Any:
-    """源数据页的 Case 使用 result.json 用例时间线判断。"""
+    """源数据页的 Case 使用 session 用例时间线判断。"""
 
     if isinstance(matched_case, dict):
         case_name = matched_case.get("case") or matched_case.get("case_name")
@@ -432,7 +432,7 @@ def _get_result_case(matched_case: dict[str, Any] | None, fallback_case: Any) ->
 
 
 def _get_result_scene(matched_case: dict[str, Any] | None, log_timestamp: float) -> str:
-    """源数据页的 Scene 使用 result.json steps 时间线判断。"""
+    """源数据页的 Scene 使用 session 用例 steps 时间线判断。"""
 
     if not isinstance(matched_case, dict) or not log_timestamp:
         return "unknown"

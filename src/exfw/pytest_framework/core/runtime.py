@@ -6,10 +6,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import pytest
 
-from exfw.aw.trace.collector import TraceCollector
-
 if TYPE_CHECKING:
-    from exfw.pytest_framework.capture.manager import LogcatManager
     from exfw.pytest_framework.rounds.runner import RoundTaskRunner
 
 
@@ -42,10 +39,6 @@ class RunConfig:
 
 
 EXFW_RUN_CONFIG_KEY: pytest.StashKey[RunConfig] = pytest.StashKey()
-
-# pytest session 级别共享的采集服务。
-LOGCAT_MANAGER_KEY: pytest.StashKey[LogcatManager] = pytest.StashKey()
-TRACE_COLLECTOR_KEY: pytest.StashKey[TraceCollector] = pytest.StashKey()
 
 # round task 调度器。
 ROUND_TASK_RUNNER_KEY: pytest.StashKey[RoundTaskRunner] = pytest.StashKey()

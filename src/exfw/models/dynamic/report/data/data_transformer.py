@@ -5,7 +5,7 @@ from typing import Any
 
 from .data_models import ActionStatsSummary, DynamicReportTask
 
-CONTEXT_FIELDS = ("id", "task_id", "serial", "round", "case", "step")
+CONTEXT_FIELDS = ("id", "task_id", "serial", "round", "case", "step", "case_id", "nodeid")
 
 
 # 以下方法用于将 CaseResult 数据按步骤展开，方便报告生成。
@@ -225,6 +225,8 @@ def route_log_data_by_metric(
             "serial": log_row.get("serial"),
             "round": log_row.get("round"),
             "case": log_row.get("case"),
+            "case_id": log_row.get("case_id"),
+            "nodeid": log_row.get("nodeid"),
             "step": log_row.get("step"),
             "sn": log_row.get("serial"),
             "loop": log_row.get("round"),

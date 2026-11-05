@@ -11,7 +11,8 @@ test_models:
       filename_max_length: 80
     runner:
       test_path: tests/debug
-      output_dir: outputs/debug
+      output_dir: outputs
+      test_name: debug
       rounds: 1
 
 testbeds:

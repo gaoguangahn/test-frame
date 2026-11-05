@@ -10,8 +10,8 @@ CASE_TIME_CONTEXT_ATTR = "_exfw_case_time_context"
 class CaseTimeContext:
     """当前 pytest 用例的时间戳转换上下文。
 
-    通用框架默认使用 PC wall-clock 写 result.json；其他模型可以在
-    pytest item 上设置该上下文，让 result.json 的绝对时间戳转换到
+    通用框架默认使用 PC wall-clock 写 session 用例结果；其他模型可以在
+    pytest item 上设置该上下文，让 session 用例结果 的绝对时间戳转换到
     指定时间源，例如 Android 设备 wall-clock。
     """
 

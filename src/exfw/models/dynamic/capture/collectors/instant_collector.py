@@ -3,7 +3,7 @@ from logging import Logger
 
 from adbutils import AdbDevice
 
-from .base_collector import InstantCollector
+from exfw.aw.logcat import InstantCollector
 
 
 class DumpMemoryCollector(InstantCollector):
@@ -158,10 +158,11 @@ class RadarLogCollector(InstantCollector):
             adb_dev.shell("dumpsys jank -cbd", timeout=10)
             self._bd_start_times[serial] = time.time()
             self.logger.debug(f"[{serial}] radar reset success, timer started.")
+            return True
         except Exception as e:
             self.logger.error(f"[{serial}] radar reset failed: {e}")
 
-        return
+        return False
 
     def collect(self, device: str | AdbDevice, context: dict):
         """结束阶段：生成数据、计算耗时并拉取文件"""

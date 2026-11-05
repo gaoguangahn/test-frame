@@ -23,6 +23,7 @@ class JankCase:
     round: int
     case: str
     category: str
+    case_id: str | None = None
 
 
 def select_jank_cases(rows: list[dict[str, Any]], selected_round: int | None = None) -> set[JankCase]:
@@ -47,5 +48,5 @@ def select_jank_cases(rows: list[dict[str, Any]], selected_round: int | None = N
                     continue
                 counts = record.get("Counts") or []
                 if jank_count(counts) > 0:
-                    selected.add(JankCase(serial, round_no, case, category))
+                    selected.add(JankCase(serial, round_no, case, category, row.get("case_id")))
     return selected

@@ -26,7 +26,7 @@ outputs/dynamic2
 目录中需要存在：
 
 ```text
-runner_result.json
+task_result.json
 <serial-or-task-dir>/session_result.json
 <case artifact_dir>/logs
 <case artifact_dir>/traces
@@ -34,7 +34,7 @@ runner_result.json
 
 工具会复用项目已有的数据发现逻辑读取：
 
-- `runner_result.json`
+- `task_result.json`
 - `session_result.json`
 - 每个 case 的 `artifact_dir`
 - 每个 case 的 `logs` 和 `traces` 目录

@@ -5,8 +5,8 @@
 它负责：
 
 - 读取项目配置，构造本次运行的 `RunConfig`；
-- 提供设备配置、设备连接、产物目录、日志、采集器等通用 fixtures；
-- 输出统一的用例结果 `result.json`；
+- 提供设备配置、设备连接、产物目录和日志等通用 fixtures；
+- 在 `session_result.json` 中输出统一的用例结果；
 - 提供通用步骤标记 `Step()`；
 - 支持按测试套多轮执行；
 - 为业务测试模型提供 round 生命周期扩展点。
@@ -36,7 +36,6 @@ exfw.pytest_framework/
     devices.py
     rounds.py
     logging.py
-    capture.py
     artifacts.py
     steps.py
 
@@ -47,9 +46,6 @@ exfw.pytest_framework/
     tasks.py
     runner.py
     scheduler.py
-
-  capture/
-    manager.py
 
 ```
 
@@ -80,15 +76,14 @@ exfw.pytest_framework/
 | `devices.py` | `device_specs`、`device_manager`、`devices`。 |
 | `rounds.py` | `current_round`。 |
 | `logging.py` | `test_logger`。 |
-| `capture.py` | `logcat_manager`、`trace_collector`。 |
 | `artifacts.py` | `case_artifacts`。 |
-| `steps.py` | 当前用例的通用 Step 记录器，将步骤写入 `result.json`。 |
+| `steps.py` | 当前用例的通用 Step 记录器，将步骤写入 session 中的用例结果。 |
 
 ### `hooks/`
 
 | 文件 | 职责 |
 |---|---|
-| `case_results.py` | 监听 pytest 用例报告，输出统一 `result.json`。 |
+| `case_results.py` | 监听 pytest 用例报告，更新 session 中的用例结果。 |
 
 ### `rounds/`
 
@@ -97,14 +92,6 @@ exfw.pytest_framework/
 | `tasks.py` | 定义 `RoundContext` 和 `RoundTask` 协议。 |
 | `runner.py` | 管理 round 生命周期任务，执行 `before_round()` / `after_round()`。 |
 | `scheduler.py` | 在传入 `--rounds` 时接管 pytest 执行循环，实现多轮执行和 round fixture 生命周期控制。 |
-
-### `capture/`
-
-| 文件 | 职责 |
-|---|---|
-| `manager.py` | 管理 pytest session 级 `LogcatManager` 和 `TraceCollector`。 |
-
----
 
 ## 如何启用
 
@@ -126,27 +113,27 @@ pytest_plugins = [
 
 | 参数 | 说明 |
 |---|---|
-| `--exfw-config PATH` | 项目配置文件路径；必填。 |
+| `--project-config PATH` | 项目 YAML 路径；默认从 pytest 根目录向上查找 `project.yaml`。 |
 | `--testbed NAME` | 选择配置文件中的测试床。 |
 | `--device NAME` | 从测试床中选择指定设备；可重复传入。未指定时使用测试床全部设备。 |
-| `--exfw-output PATH` | 本次执行产物输出根目录，必填。 |
+| `--output-dir PATH` | 直接运行时的输出父目录，默认为 `outputs`，实际写入其 `debug` 子目录。 |
 | `--rounds COUNT` | 按测试套执行的轮数；未指定时不启用 round 调度。 |
 
 示例：
 
 ```bash
 pytest test_models/dynamic_model/tests \
-  --exfw-config project.yaml \
+  --project-config project.yaml \
   --testbed lab_a \
   --rounds 3 \
-  --exfw-output artifacts
+  --output-dir artifacts
 ```
 
 ---
 
 ## 项目配置
 
-必须通过 `--exfw-config` 指定配置文件；`runtime.resources_dir` 必须指向已存在的目录。相对路径以配置文件所在目录为基准。
+默认从 pytest 根目录向上查找 `project.yaml`，也可通过 `--project-config` 指定；`runtime.resources_dir` 必须指向已存在的目录。相对路径以配置文件所在目录为基准。
 
 示例：
 
@@ -325,7 +312,6 @@ CaseArtifacts
 case_artifacts.root_dir
 case_artifacts.run_dir
 case_artifacts.case_dir
-case_artifacts.result_file
 case_artifacts.round_no
 case_artifacts.case_id
 ```
@@ -354,42 +340,7 @@ def test_log(test_logger):
 
 ---
 
-### `logcat_manager`
-
-session 级 Logcat collector 注册表。
-
-常用于业务插件注册自己的 logcat collector。
-
-```python
-def pytest_configure(config):
-    logcat_manager = get_or_create_logcat_manager(config)
-    logcat_manager.register("xxx", collector)
-```
-
-用例或任务中获取：
-
-```python
-def test_logcat(logcat_manager):
-    collector = logcat_manager.get("xxx")
-```
-
----
-
-### `trace_collector`
-
-session 级 Perfetto Trace 采集器。
-
-示例：
-
-```python
-def test_trace(devices, trace_collector):
-    device = devices["main"]
-
-    with trace_collector.collect(device.serial, "case_001__AppLaunch"):
-        device.start_app("相机")
-```
-
-`TraceCollector` 只负责启动、停止、拉取和清理 Trace，不负责业务解析。
+日志与 Trace 的具体采集由各测试模型负责。动态模型通过自己的采集服务提供 `self.tracer`；通用 pytest 层不创建或管理采集器。
 
 ---
 
@@ -440,7 +391,7 @@ Step("滑动列表", op_type="swipe", direction="up")
 
 ### 输出位置
 
-`result.json` 顶层会包含：
+`session_result.json` 中相应用例会包含：
 
 ```json
 {
@@ -486,8 +437,6 @@ self.output_dir
 self.current_round
 self.case_artifacts
 self.test_logger
-self.logcat_manager
-self.trace_collector
 ```
 
 示例：
@@ -516,60 +465,32 @@ class TestDevice(BaseTestCase):
 
 ---
 
-## 用例结果 `result.json`
+## Session 和用例结果
 
-`exfw.pytest_framework/hooks/case_results.py` 会在用例执行过程中输出统一结果文件。
-
-结果路径来自：
-
-```python
-case_artifacts.result_file
-```
-
-典型内容：
+每次 pytest session 在输出根目录写入 `session_result.json`。通用数据类位于 `result/models.py`，包括 session、轮次和用例结果；`result/store.py` 负责线程安全的合并与原子写入。业务模型通过各层的 `extensions` 命名空间补充数据，无设备测试同样可以使用。
 
 ```json
 {
-  "nodeid": "tests/test_demo.py::TestDemo::test_demo",
-  "case_name": "test_demo",
-  "outcome": "passed",
-  "passed": true,
-  "failed": false,
-  "skipped": false,
-  "duration": 1.23,
-  "round": 1,
-  "testbed": "lab_a",
-  "devices": [
-    {
-      "name": "main",
-      "serial": "xxx",
-      "model": "BVL",
-      "driver": "adb"
-    }
-  ],
-  "start_time": 1780000000.0,
-  "stop_time": 1780000001.23,
-  "longrepr": null,
-  "steps": [],
-  "phases": {
-    "setup": {"outcome": "passed"},
-    "call": {"outcome": "passed"},
-    "teardown": {"outcome": "passed"}
-  },
-  "sections": [],
-  "user_properties": {}
+  "schema_version": 2,
+  "summary": {"total": 1, "passed": 1},
+  "rounds": [{
+    "round": 1,
+    "cases": [{
+      "case_id": "TestDemo_test_demo",
+      "nodeid": "tests/test_demo.py::TestDemo::test_demo",
+      "case_name": "test_demo",
+      "outcome": "passed",
+      "steps": [],
+      "artifacts": {"case_dir": "round_001/TestDemo_test_demo"},
+      "extensions": {}
+    }],
+    "extensions": {}
+  }],
+  "extensions": {}
 }
 ```
 
-### 写入时机
-
-结果文件会在以下时机更新：
-
-- setup 失败或跳过；
-- call 阶段结束；
-- teardown 阶段结束。
-
-最终以 teardown 后写入的结果为准。
+用例 teardown 后写入最终执行结果，setup 失败或跳过时也会记录。模型在结果产生前或之后写入扩展时，store 按轮次和 case id 合并，不会覆盖用例执行信息。
 
 ---
 
@@ -699,25 +620,14 @@ context.rounds
 
 ## 产物目录规则
 
-### 未启用 `--rounds`
-
 ```text
 artifacts/
-  TestClass_test_method/
-    result.json
+  session_result.json
+  round_001/                     # 使用 --rounds 时
+    TestClass_test_method/       # 截图、日志等原始产物
 ```
 
-### 启用 `--rounds`
-
-```text
-artifacts/
-  round_001/
-    TestClass_test_method/
-      result.json
-    round_002/
-    TestClass_test_method/
-      result.json
-  ```
+未启用 `--rounds` 时，用例目录直接位于 `artifacts/` 下。
 
 ### case id 规则
 
@@ -798,7 +708,7 @@ exfw.pytest_framework 负责通用上下文和机制
    不要在业务代码中手写和 pytest nodeid 强绑定的目录规则。
 
 8. **修改 result 结构时同步更新本文档**  
-   `result.json` 是业务模型和报告工具的重要接口。
+   `session_result.json` 是业务模型和报告工具的重要接口。
 
 9. **新增 fixture 时放到 `fixtures/` 并在 `plugin.py` 的 `pytest_plugins` 中注册**。
 
@@ -807,4 +717,4 @@ exfw.pytest_framework 负责通用上下文和机制
 
 ## 日志输出
 
-`exfw.log` 记录框架与用例日志，包含可用的用例 nodeid 和轮次。普通 pytest 运行还会将 pytest 终端报告写入输出目录的 `pytest-output.log`；该文件不保证包含 `-s` 时直接写到 stdout/stderr 的内容。通过 dynamic runner 运行时，子进程的完整 stdout/stderr 会保存到同名文件，终端只显示带设备标识的进度。每次运行会覆盖这些日志，需保留历史时请使用独立输出目录。
+`execution.log` 记录框架与用例日志，包含可用的用例 nodeid 和轮次。普通 pytest 运行还会将 pytest 终端报告写入输出目录的 `pytest-output.log`；该文件不保证包含 `-s` 时直接写到 stdout/stderr 的内容。直接执行 pytest 时默认保留 pytest 原生输出；需要在终端显示框架日志可添加 `--exfw-console-log`。通过 dynamic runner 运行时，子进程的完整 stdout/stderr 会保存到同名文件，交互式终端显示设备进度，结束后按设备汇总失败用例；非交互终端逐行显示。每次运行会覆盖这些日志，需保留历史时请使用独立输出目录。

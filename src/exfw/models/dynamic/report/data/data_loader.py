@@ -25,22 +25,22 @@ def load_session_result(task_dir: str | Path) -> dict[str, Any]:
     return session_data
 
 
-def load_runner_result(runner_output_dir: str | Path) -> dict[str, Any]:
-    """读取 dynamic runner 输出目录下的 runner_result.json。"""
+def load_task_result(runner_output_dir: str | Path) -> dict[str, Any]:
+    """读取 dynamic runner 输出目录下的 task_result.json。"""
 
     runner_output_path = Path(runner_output_dir)
-    runner_result_file = runner_output_path / "runner_result.json"
+    runner_result_file = runner_output_path / "task_result.json"
 
     if not runner_result_file.is_file():
         raise FileNotFoundError(
-            f"未找到 runner_result.json，请传入 dynamic runner 输出目录：{runner_result_file}"
+            f"未找到 task_result.json，请传入 dynamic runner 输出目录：{runner_result_file}"
         )
 
     with runner_result_file.open("r", encoding="utf-8") as file:
         runner_result = json.load(file)
 
     if not isinstance(runner_result, dict):
-        raise TypeError("runner_result.json 格式异常，根节点必须是对象。")
+        raise TypeError("task_result.json 格式异常，根节点必须是对象。")
 
     return runner_result
 
@@ -80,6 +80,7 @@ def discover_runner_report_tasks(
     runner_output_dir: str | Path,
     runner_result: dict[str, Any],
     serial_filter: set[str] | None = None,
+    *, require_task_id: bool = True,
 ) -> list[DynamicReportTask]:
     """从 runner_result 中发现需要参与报告生成的 pytest 子任务。"""
 
@@ -88,7 +89,7 @@ def discover_runner_report_tasks(
     raw_tasks = runner_result.get("tasks") or []
 
     if not isinstance(raw_tasks, list):
-        raise TypeError("runner_result.json 中 tasks 必须是列表。")
+        raise TypeError("task_result.json 中 tasks 必须是列表。")
 
     report_tasks: list[DynamicReportTask] = []
 
@@ -112,15 +113,16 @@ def discover_runner_report_tasks(
         if serial_filter is not None and main_serial not in serial_filter:
             continue
 
-        session_data = load_session_result(task_dir)
+        try:
+            session_data = load_session_result(task_dir)
+        except (OSError, ValueError, TypeError):
+            continue
         task_id = session_data.get("extensions", {}).get("dynamic_model", {}).get(
             "task_id"
         )
 
-        if not isinstance(task_id, str) or not task_id:
-            raise ValueError(
-                f"子任务 session_result.json 中未找到 extensions.dynamic_model.task_id：{task_dir}"
-            )
+        if require_task_id and (not isinstance(task_id, str) or not task_id):
+            continue
 
         report_tasks.append(
             DynamicReportTask(
@@ -179,195 +181,42 @@ def _resolve_runner_task_path(
     return task_path
 
 
-def load_all_case_records(
-    task_dir: str | Path,
-    session_data: dict[str, Any],
-    serial: str | None = None,
-    rounds: int | None = None,
-) -> list[dict[str, Any]]:
-    """读取单个 pytest 子任务中所有用例 result.json 的用例/步骤时间线。"""
-
-    task_path = Path(task_dir)
-    case_records: list[dict[str, Any]] = []
-
-    for case in session_data.get("cases", []):
-        if not isinstance(case, dict):
+def iter_session_cases(session_data: dict[str, Any]):
+    """展开 session 的轮次和用例；产物路径始终相对设备子任务目录。"""
+    for round_data in session_data.get("rounds", []):
+        if not isinstance(round_data, dict):
             continue
+        for case in round_data.get("cases", []):
+            if not isinstance(case, dict):
+                continue
+            artifacts = case.get("artifacts") or {}
+            yield {**case, "round": round_data.get("round"), "artifact_dir": artifacts.get("case_dir")}
 
-        case_round = case.get("round")
-        if rounds is not None and case_round != rounds:
+
+def load_all_case_records(task_dir: str | Path, session_data: dict[str, Any], serial: str | None = None, rounds: int | None = None) -> list[dict[str, Any]]:
+    """从 session 结果读取用例时间线。"""
+    records = []
+    for case in iter_session_cases(session_data):
+        if rounds is not None and case.get("round") != rounds:
             continue
-
-        result_path_value = case.get("result_path")
-        artifact_dir = case.get("artifact_dir")
-
-        if result_path_value:
-            result_file = task_path / Path(str(result_path_value).replace("\\", "/"))
-        elif artifact_dir:
-            result_file = (
-                task_path / Path(str(artifact_dir).replace("\\", "/")) / "result.json"
-            )
-        else:
-            print("用例缺少 result_path/artifact_dir，跳过用例时间线读取：case_id=%s", case.get("case_id"))
+        started, stopped = case.get("started_at"), case.get("stopped_at")
+        if not isinstance(started, (int, float)) or not isinstance(stopped, (int, float)):
             continue
+        steps = [{"index": step.get("index"), "description": step.get("description", ""), "timestamp": step["timestamp"]} for step in case.get("steps", []) if isinstance(step, dict) and isinstance(step.get("timestamp"), (int, float))]
+        steps.sort(key=lambda item: item["timestamp"])
+        records.append({"serial": serial, "round": case.get("round"), "case": case.get("case_name"), "case_id": case.get("case_id"), "nodeid": case.get("nodeid"), "started_at": started, "stopped_at": stopped, "steps": steps})
+    return sorted(records, key=lambda item: (str(item.get("serial") or ""), item.get("round") or 0, item.get("started_at") or 0))
 
-        if not result_file.is_file():
-            print("未找到用例结果文件，跳过用例时间线读取：case_id=%s, file=%s", case.get("case_id"), result_file)
+
+def load_all_trace_records(task_dir: str | Path, session_data: dict[str, Any], serial: str | None = None, rounds: int | None = None) -> list[dict[str, Any]]:
+    """从动态模型用例扩展读取 Trace 元数据。"""
+    records = []
+    for case in iter_session_cases(session_data):
+        if rounds is not None and case.get("round") != rounds:
             continue
-
-        try:
-            with result_file.open("r", encoding="utf-8") as file:
-                result_data = json.load(file)
-        except (OSError, json.JSONDecodeError):
-            print("读取用例结果文件失败：case_id=%s, file=%s", case.get("case_id"), result_file)
-            continue
-
-        if not isinstance(result_data, dict):
-            print("用例结果文件格式异常，根节点必须为对象：%s", result_file)
-            continue
-
-        started_at = result_data.get("started_at")
-        stopped_at = result_data.get("stopped_at")
-        case_name = result_data.get("case_name") or case.get("case_name")
-        steps = result_data.get("steps") or []
-
-        if not case_name or not isinstance(started_at, (int, float)) or not isinstance(stopped_at, (int, float)):
-            continue
-
-        normalized_steps = []
-        if isinstance(steps, list):
-            for step in steps:
-                if not isinstance(step, dict):
-                    continue
-
-                timestamp = step.get("timestamp")
-                if not isinstance(timestamp, (int, float)):
-                    continue
-
-                normalized_steps.append(
-                    {
-                        "index": step.get("index"),
-                        "description": step.get("description", ""),
-                        "timestamp": timestamp,
-                    }
-                )
-
-        normalized_steps.sort(key=lambda item: item.get("timestamp") or 0)
-
-        case_records.append(
-            {
-                "serial": serial,
-                "round": case_round,
-                "case": case_name,
-                "started_at": started_at,
-                "stopped_at": stopped_at,
-                "steps": normalized_steps,
-            }
-        )
-
-    case_records.sort(
-        key=lambda item: (
-            str(item.get("serial") or ""),
-            item.get("round") if item.get("round") is not None else -1,
-            item.get("started_at") or 0,
-        )
-    )
-
-    return case_records
-
-
-def load_all_trace_records(
-    task_dir: str | Path,
-    session_data: dict[str, Any],
-    serial: str | None = None,
-    rounds: int | None = None,
-) -> list[dict[str, Any]]:
-    """
-    汇总单个 pytest 子任务中所有用例的 traces/trace_records.json。
-
-    返回报告需要的轻量 trace 采集记录列表，并在读取时补齐 serial / round / case，
-    方便后续通过 serial + round + case + trace_name 与 API trace_result 对应，
-    或通过 serial + round + case + 时间范围与 log_result 对应。
-    """
-
-    task_path = Path(task_dir)
-    all_traces: list[dict[str, Any]] = []
-
-    for case in session_data.get("cases", []):
-        if not isinstance(case, dict):
-            continue
-
-        case_round = case.get("round")
-
-        if rounds is not None and case_round != rounds:
-            continue
-
-        artifact_dir = case.get("artifact_dir")
-        if not artifact_dir:
-            print("用例缺少 artifact_dir，跳过 Trace 记录读取：case_id=%s", case.get("case_id"))
-            continue
-
-        artifact_path = task_path / Path(str(artifact_dir).replace("\\", "/"))
-        trace_records_file = artifact_path / "traces" / "trace_records.json"
-
-        if not trace_records_file.is_file():
-            print("未找到用例 Trace 记录文件，跳过：case_id=%s, file=%s", case.get("case_id"), trace_records_file)
-            continue
-
-        try:
-            with trace_records_file.open("r", encoding="utf-8") as file:
-                trace_record_data = json.load(file)
-
-        except (OSError, json.JSONDecodeError):
-            print("读取 Trace 记录文件失败：case_id=%s, file=%s", case.get("case_id"), trace_records_file)
-            continue
-
-        if not isinstance(trace_record_data, dict):
-            print("Trace 记录文件格式异常，根节点必须为对象：%s", trace_records_file)
-            continue
-
-        traces = trace_record_data.get("traces", [])
-
-        if not isinstance(traces, list):
-            print("Trace 记录文件格式异常，traces 必须为列表：%s", trace_records_file)
-            continue
-
-        case_name = case.get("case_name")
-
-        for trace in traces:
+        dynamic = (case.get("extensions") or {}).get("dynamic_model") or {}
+        for trace in dynamic.get("traces", []):
             if not isinstance(trace, dict):
                 continue
-
-            trace_serial = trace.get("serial") or serial
-
-            if serial is not None and trace_serial != serial:
-                continue
-
-            trace_path = trace.get("trace_path", "")
-            trace_name = trace.get("trace_name") or Path(str(trace_path)).name
-
-            all_traces.append(
-                {
-                    "serial": trace_serial,
-                    "round": case_round,
-                    "case": case_name,
-                    "trace_name": trace_name,
-                    "trace_path": trace_path,
-                    "description": trace.get("description", ""),
-                    "start_time": trace.get("start_time"),
-                    "end_time": trace.get("end_time"),
-                    "duration_seconds": trace.get("duration_seconds"),
-                    "time_source": trace.get("time_source") or trace_record_data.get("time_source"),
-                }
-            )
-
-    all_traces.sort(
-        key=lambda item: (
-            str(item.get("serial") or ""),
-            item.get("round") if item.get("round") is not None else -1,
-            str(item.get("case") or ""),
-            item.get("start_time") or 0,
-        )
-    )
-
-    return all_traces
+            records.append({"serial": serial, "round": case.get("round"), "case": case.get("case_name"), "case_id": case.get("case_id"), "nodeid": case.get("nodeid"), "trace_name": trace.get("name"), "trace_path": trace.get("path"), "description": trace.get("description", ""), "start_time": trace.get("start_time"), "end_time": trace.get("end_time"), "duration_seconds": trace.get("duration_seconds"), "time_source": trace.get("time_source")})
+    return sorted(records, key=lambda item: (str(item.get("serial") or ""), item.get("round") or 0, str(item.get("case") or ""), item.get("start_time") or 0))

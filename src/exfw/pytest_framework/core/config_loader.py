@@ -1,52 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
-import yaml
-
+from exfw.project_config import load_project_config, resolve_project_path
 from .runtime import DeviceSpec
-
-
-def resolve_project_path(project_root: Path, raw_path: str) -> Path:
-    """
-    将配置或命令行中的路径解析为绝对路径。
-
-    规则：
-    - 绝对路径：保持不变；
-    - 相对路径：相对于 project_root；
-    - project_root 即配置文件所在目录。
-    """
-    normalized_path = raw_path.strip()
-
-    if not normalized_path:
-        raise ValueError("路径不能为空。")
-
-    candidate = Path(normalized_path).expanduser()
-
-    if candidate.is_absolute():
-        return candidate.resolve()
-
-    return (project_root / candidate).resolve()
-
-
-def load_project_config(path: Path) -> dict[str, Any]:
-    """读取 YAML 项目配置文件。"""
-    if not path.is_file():
-        raise FileNotFoundError(f"配置文件不存在：{path}")
-
-    with path.open("r", encoding="utf-8") as file:
-        data = yaml.safe_load(file) or {}
-
-    if not isinstance(data, dict):
-        raise TypeError("YAML 根节点必须是映射对象。")
-
-    testbeds = data.get("testbeds")
-
-    if testbeds is not None and not isinstance(testbeds, dict):
-        raise TypeError("配置中的 testbeds 必须是映射对象。")
-
-    return data
 
 
 def load_testbed_devices(

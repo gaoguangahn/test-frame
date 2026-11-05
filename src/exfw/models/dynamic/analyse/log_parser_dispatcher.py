@@ -59,11 +59,12 @@ class LogParserDispatcher:
     }
 
     def __init__(
-        self, executor: ThreadPoolExecutor, logger: Logger | None = None
+        self, executor: ThreadPoolExecutor, logger: Logger | None = None, metric_map: dict | None = None
     ) -> None:
         self.log_analysis = LogAnalysis()
         self.logger = logger or logging.getLogger("exfw.LogParserDispatcher")
         self._executor = executor
+        self.LOG_METRIC_MAP = metric_map if metric_map is not None else self.LOG_METRIC_MAP
 
     def parse(self, log_path: str | Path, brand: str = "Honor") -> list[dict[str, Any]]:
         """

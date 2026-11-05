@@ -145,13 +145,13 @@ class TraceBounds:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="用 pftrace 内真实设备时间修正 dynamic 结果中的 trace_records.json。"
+        description="用 pftrace 内真实设备时间修正 session_result.json 中的 Trace 记录。"
     )
 
     parser.add_argument(
         "--task-dir",
         required=True,
-        help="dynamic runner 输出目录、traces 目录或 trace_records.json 文件。",
+        help="dynamic runner 输出目录、设备目录或 session_result.json 文件。",
     )
 
     parser.add_argument(
@@ -174,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--no-backup",
         action="store_true",
-        help="不生成 trace_records.json.bak 备份。",
+        help="不生成 session_result.json.bak 备份。",
     )
 
     parser.add_argument(
@@ -198,7 +198,7 @@ def main(argv: list[str] | None = None) -> int:
     records_files = discover_trace_record_files(task_dir)
 
     if not records_files:
-        print(f"未找到 trace_records.json：{task_dir}")
+        print(f"未找到 session_result.json：{task_dir}")
         return 1
 
     total_files = 0
@@ -238,19 +238,11 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def discover_trace_record_files(task_dir: Path) -> list[Path]:
-    """发现 traces/trace_records.json。"""
-
-    if task_dir.is_file() and task_dir.name == "trace_records.json":
+    """发现设备子任务的 session_result.json。"""
+    if task_dir.is_file() and task_dir.name == "session_result.json":
         return [task_dir]
-
-    if task_dir.is_dir() and task_dir.name == "traces":
-        records_file = task_dir / "trace_records.json"
-        if records_file.is_file():
-            return [records_file]
-
     if task_dir.is_dir():
-        return sorted(task_dir.rglob("traces/trace_records.json"))
-
+        return sorted(task_dir.rglob("session_result.json"))
     return []
 
 
@@ -272,49 +264,42 @@ def patch_trace_records_file(
         print(f"  读取失败：{error}")
         return {"total": 0, "patched": 0, "missing": 0, "failed": 1}
 
-    traces = data.get("traces")
-    if not isinstance(traces, list):
-        print("  格式异常：traces 不是列表")
+    if not isinstance(data, dict) or not isinstance(data.get("rounds"), list):
+        print("  格式异常：session rounds 不是列表")
         return {"total": 0, "patched": 0, "missing": 0, "failed": 1}
 
-    total = 0
-    patched = 0
-    missing = 0
-    failed = 0
-
-    traces_dir = records_file.parent
-
-    # (trace 在 JSON 中的位置, trace 字典, 文件名, 完整文件路径)
+    traces = []
+    for round_data in data["rounds"]:
+        if not isinstance(round_data, dict):
+            continue
+        for case in round_data.get("cases", []):
+            if not isinstance(case, dict):
+                continue
+            dynamic = (case.get("extensions") or {}).get("dynamic_model") or {}
+            traces.extend(item for item in dynamic.get("traces", []) if isinstance(item, dict))
+    total, patched, missing, failed = 0, 0, 0, 0
+    root = records_file.parent.resolve()
     jobs: list[tuple[int, dict, str, Path]] = []
-
     for index, trace in enumerate(traces):
-        if not isinstance(trace, dict):
-            continue
-
         total += 1
-
-        trace_name = Path(str(trace.get("trace_path") or "")).name
-        if not trace_name:
+        relative = trace.get("path")
+        if not isinstance(relative, str) or not relative:
             failed += 1
-            print("  跳过：trace_path 为空")
+            print("  跳过：Trace 相对路径为空")
             continue
-
-        trace_file = traces_dir / trace_name
+        trace_file = (root / Path(relative.replace("\\", "/"))).resolve()
+        if not trace_file.is_relative_to(root):
+            failed += 1
+            print(f"  跳过设备目录外路径：{relative}")
+            continue
         if not trace_file.is_file():
             missing += 1
             print(f"  缺少 trace 文件：{trace_file}")
             continue
-
-        jobs.append((index, trace, trace_name, trace_file))
-
+        jobs.append((index, trace, trace.get("name") or trace_file.name, trace_file))
     if not jobs:
         print("  没有可查询的 trace 文件。")
-        return {
-            "total": total,
-            "patched": patched,
-            "missing": missing,
-            "failed": failed,
-        }
+        return {"total": total, "patched": patched, "missing": missing, "failed": failed}
 
     actual_workers = min(workers, len(jobs))
 
@@ -345,7 +330,7 @@ def patch_trace_records_file(
             except Exception as error:
                 query_results[index] = error
 
-    # 保持按 trace_records.json 中原本的顺序输出和更新。
+    # 保持原本的 Trace 顺序，仅更新查询成功的记录。
     for index, trace, trace_name, _trace_file in jobs:
         result = query_results[index]
 
@@ -364,8 +349,8 @@ def patch_trace_records_file(
         trace["end_time"] = bounds.end_time
         trace["duration_seconds"] = round(bounds.duration_seconds, 3)
 
-        if "trace_name" not in trace:
-            trace["trace_name"] = trace_name
+        trace["time_source"] = "device_realtime"
+        trace["time_context"] = None
 
         patched += 1
 
@@ -377,9 +362,6 @@ def patch_trace_records_file(
             f"duration {old_duration} -> {trace['duration_seconds']}"
         )
 
-    data["schema_version"] = data.get("schema_version") or 1
-    data["time_source"] = "device_realtime"
-    data["trace_count"] = len([item for item in traces if isinstance(item, dict)])
 
     # dry-run 只修改内存中的 data，不写文件。
     if not dry_run and patched:

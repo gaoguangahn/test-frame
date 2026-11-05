@@ -43,7 +43,12 @@ class RoundTaskRunner:
             )
 
             started_tasks.append(task)
-            task.before_round(context)
+            try:
+                task.before_round(context)
+            except BaseException:
+                # 返回值尚未交给调度器；在这里回滚已启动任务，避免采集进程遗留。
+                self.after_round(context=context, started_tasks=started_tasks)
+                raise
 
         return started_tasks
 

@@ -46,14 +46,15 @@ class TraceParserDispatcher:
     }
 
     def __init__(
-        self, executor: ThreadPoolExecutor, logger: Logger | None = None
+        self, executor: ThreadPoolExecutor, logger: Logger | None = None, metric_map: dict | None = None
     ) -> None:
         self.trace_analysis = TraceAnalysis()
         self.logger = logger or logging.getLogger("exfw.TraceParserDispatcher")
         self._executor = executor
+        self._metric_map = metric_map if metric_map is not None else self.METRIC_MAP
 
     @classmethod
-    def get_metric_configs(cls, trace_file: str | Path) -> list[dict[str, Any]]:
+    def get_metric_configs(cls, trace_file: str | Path, metric_map: dict | None = None) -> list[dict[str, Any]]:
         """
         根据 Trace 文件名的包含关系，获取对应的指标配置列表。
 
@@ -78,11 +79,12 @@ class TraceParserDispatcher:
         trace_file_stem = trace_file.stem
 
         # 按 key 长度倒序匹配，避免未来存在包含关系时短 key 优先命中。
-        metric_codes = sorted(cls.METRIC_MAP.keys(), key=len, reverse=True)
+        mapping = cls.METRIC_MAP if metric_map is None else metric_map
+        metric_codes = sorted(mapping.keys(), key=len, reverse=True)
 
         for metric_code in metric_codes:
             if metric_code in trace_file_stem:
-                return cls.METRIC_MAP[metric_code]
+                return mapping[metric_code]
 
         return []
 
@@ -153,7 +155,7 @@ class TraceParserDispatcher:
         skipped_trace_files = []
 
         for trace_file in trace_files:
-            metric_configs = self.get_metric_configs(trace_file)
+            metric_configs = self.get_metric_configs(trace_file, self._metric_map)
 
             if not metric_configs:
                 skipped_trace_files.append(trace_file)
@@ -259,7 +261,7 @@ class TraceParserDispatcher:
             "error": None,
         }
 
-        metric_config = metric_config or self.get_metric_config(trace_file)
+        metric_config = metric_config or next(iter(self.get_metric_configs(trace_file, self._metric_map)), None)
 
         if metric_config is None:
             result["error"] = (

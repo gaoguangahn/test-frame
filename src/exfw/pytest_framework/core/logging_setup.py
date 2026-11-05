@@ -16,12 +16,12 @@ class ContextFilter(logging.Filter):
         return True
 
 
-def configure_logging(log_dir: Path) -> Path:
+def configure_logging(log_dir: Path, *, console: bool = False) -> Path:
     """
     初始化框架日志。
 
     所有名称以 ``exfw`` 开头的 Logger，
-    都会输出到控制台和当前运行目录的日志文件。
+    写入当前运行目录的日志文件；可选输出到控制台。
 
     Args:
         log_dir: 框架日志保存目录。
@@ -31,7 +31,7 @@ def configure_logging(log_dir: Path) -> Path:
     """
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    log_file = log_dir / "exfw.log"
+    log_file = log_dir / "execution.log"
 
     formatter = logging.Formatter(
         fmt=("%(asctime)s.%(msecs)03d | %(levelname)-8s | round=%(exfw_round)s | case=%(exfw_case)s | %(name)s | %(message)s"),
@@ -66,7 +66,7 @@ def configure_logging(log_dir: Path) -> Path:
         framework_logger.removeHandler(handler)
         handler.close()
 
-    if not os.environ.get("EXFW_RUNNER_MODE"):
+    if console and not os.environ.get("EXFW_RUNNER_MODE"):
         framework_logger.addHandler(console_handler)
     else:
         console_handler.close()

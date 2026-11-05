@@ -1,0 +1,19 @@
+# 文件名关键字映射到 metric-parser 的解析方法；空列表表示不解析。
+trace:
+  AppLaunch:
+    - metric: startup_transition
+  AppExit:
+    - metric: exit_animation
+  AppClick:
+    - metric: click_transition
+  CameraPhoto:
+    - metric: startup_transition
+      params: {from_app: com.hihonor.camera}
+log:
+  DumpsysMeminfo: [parse_dumpsys_meminfo]
+  io_measure: [parse_io_measure]
+  io_stat: [parse_io_stat]
+  actionstats: [parse_animation_jank, parse_fling_jank, parse_fluency_fling_jank]
+  JankRaw: [parse_jank_log]
+  AdbLog: [parse_adb_log]
+  proc_memory: [parse_proc_memory]

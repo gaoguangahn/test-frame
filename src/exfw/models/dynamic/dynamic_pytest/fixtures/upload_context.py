@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 
 from exfw.models.dynamic.dynamic_pytest.runtime import get_dynamic_model_runtime
+from exfw.pytest_framework.core.artifacts import build_case_id
 
 
 @pytest.fixture(scope="function")
@@ -21,5 +22,7 @@ def dynamic_upload_context(
         "task_id": runtime.task_id,
         "round": current_round,
         "case": request.node.name,
+        "nodeid": request.node.nodeid,
+        "case_id": build_case_id(request.node.nodeid),
         "step": "__case__",
     }

@@ -11,7 +11,7 @@ def main() -> int:
     parser.add_argument(
         "--task-dir",
         required=True,
-        help="dynamic runner 输出目录，目录下必须包含 runner_result.json。",
+        help="dynamic runner 输出目录，目录下必须包含 task_result.json。",
     )
     parser.add_argument(
         "--output",
@@ -30,6 +30,7 @@ def main() -> int:
         default=None,
         help="按轮次筛选。默认包含全部轮次。",
     )
+    parser.add_argument("--source", choices=("server", "local"), default="server", help="报告数据来源，默认 server；local 使用本地解析结果。")
 
     args = parser.parse_args()
 
@@ -41,6 +42,7 @@ def main() -> int:
         task_dir=args.task_dir,
         serial=args.serial,
         round=args.round,
+        source=args.source,
     )
     reporter.generate_report(output_file=output_file)
 

@@ -4,9 +4,9 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from exfw.models.dynamic.result import CaseResultReporter
+from exfw.models.dynamic.result import DynamicResultProcessor
 
-from .capture.capture_service import DynamicModelCaptureService
+from exfw.models.dynamic.capture.service import DynamicModelCaptureService
 from .config import DynamicModelConfig
 
 
@@ -17,7 +17,7 @@ class DynamicModelRuntime:
     task_id: str | None
     config: DynamicModelConfig
     capture_service: DynamicModelCaptureService
-    case_result_reporter: CaseResultReporter | None
+    case_result_reporter: DynamicResultProcessor | None
     recovery_required_serials: set[str] = field(default_factory=set)
 
 

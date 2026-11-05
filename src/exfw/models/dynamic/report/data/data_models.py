@@ -10,7 +10,7 @@ class DynamicReportTask:
     """dynamic runner 下一个 pytest 子任务的报告上下文。"""
 
     task_dir: Path
-    task_id: str
+    task_id: str | None
     main_serial: str | None
     session_data: dict[str, Any]
     device_info: dict[str, Any]

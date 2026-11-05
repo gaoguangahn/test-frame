@@ -1,0 +1,5 @@
+# 动态模型默认采集项；顺序决定启动和快照执行顺序。
+round_start: [jank_log, events_log, adb_log, dmesg_log]
+round_end: [dumpsys_meminfo]
+case_start: [io_stat, proc_memory, radar]
+case_end: [io_measure, io_stat, radar, proc_memory]

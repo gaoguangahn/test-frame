@@ -4,7 +4,7 @@ import logging
 
 import pytest
 
-from exfw.models.dynamic.dynamic_pytest.time_sync import (
+from exfw.models.dynamic.capture.time_sync import (
     capture_android_device_time_context,
 )
 from exfw.pytest_framework.core.runtime import DeviceSpec
@@ -22,7 +22,7 @@ def dynamic_case_time_context(
     """动态模型用例的设备时间上下文。
 
     每个用例开始时只对 main 设备采样一次 PC/设备时间 offset，并挂到
-    pytest item 上。通用 result.json 写入逻辑会自动使用该上下文转换
+    pytest item 上。通用 session 用例结果写入逻辑会自动使用该上下文转换
     started_at / stopped_at / steps.timestamp。
     """
 

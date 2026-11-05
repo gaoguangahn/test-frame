@@ -1,7 +1,6 @@
 import adbutils
 
-from .base_collector import ContinuousCollector
-from .cmd_runner import CmdRunner
+from exfw.aw.logcat import CmdRunner, ContinuousCollector
 
 
 class JankLogCollector(ContinuousCollector):

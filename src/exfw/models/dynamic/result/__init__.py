@@ -1,3 +1,3 @@
-from .case_result_reporter import CaseResultReporter
+from .processor import DynamicResultProcessor
 
-__all__ = ["CaseResultReporter"]
+__all__ = ["DynamicResultProcessor"]

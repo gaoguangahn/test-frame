@@ -50,7 +50,7 @@ class ReportGenerator:
             session_data.get("extensions", {}).get("dynamic_model", {}).get("task_id")
         )
 
-    def load_report_data(self, task_dir: str, serial=None, round=None):
+    def load_report_data(self, task_dir: str, serial=None, round=None, source="server"):
         """从 dynamic runner 输出目录和结果服务读取并整理报表数据。"""
 
         self._load_app_map()
@@ -59,6 +59,7 @@ class ReportGenerator:
             serial=serial,
             round=round,
             fetcher=self.data_fetcher,
+            source=source,
         )
         self._apply_dataset()
 

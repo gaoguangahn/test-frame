@@ -1,4 +1,3 @@
-import json
 import logging
 import shlex
 import threading
@@ -31,26 +30,13 @@ class TraceCollector:
     Perfetto Trace 采集控制器。
 
     约束：
-    1. 同一设备同一时刻只允许一份活跃 Trace。
+    1. 同一采集器实例中，同一设备同一时刻只允许一份活跃 Trace。
     2. 不同设备可以并行抓取 Trace。
     3. 本类只负责 Trace 的启动和停止，不关心测试步骤。
+    同一设备若由多个采集器实例操作，调用方需避免并发采集。
     """
 
-    _instance = None
-    _instance_lock = threading.Lock()
-
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            with cls._instance_lock:
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
-
-        return cls._instance
-
     def __init__(self, logger: Logger | None = None):
-        if getattr(self, "_initialized", False):
-            return
-
         self.logger = logger or logging.getLogger("exfw.TraceCollector")
 
         # 保护 _active_traces。
@@ -71,8 +57,6 @@ class TraceCollector:
 
         # 本次 Python 进程生命周期内，已成功完成 Trace 环境准备的设备。
         self._environment_ready_devices: set[str] = set()
-
-        self._initialized = True
 
     def _get_device_lock(self, serial: str) -> threading.Lock:
         """获取指定设备的独立操作锁。"""
@@ -390,92 +374,22 @@ class TraceCollector:
                 )
                 return False
 
-    def save_completed_trace_records(self, output_file: str | Path) -> Path | None:
-        """
-        将当前进程中所有已完成的 Trace 记录保存为 JSON 文件。
+    def completed_trace_records(self, serial: str) -> tuple[TraceRecord, ...]:
+        """返回设备已完成记录的快照；调用方持久化成功后再确认清理。"""
+        with self._state_lock:
+            return tuple(self._completed_traces.get(serial, ()))
 
-        仅保存已经成功停止的 Trace；仍在采集中的 Trace 不会写入。
-        文件保存成功后清空已完成 Trace 的内存缓存；
-        保存失败时保留缓存，避免记录丢失。
-
-        Args:
-            output_file: JSON 输出文件路径，例如：
-                /path/to/traces/trace_records.json
-
-        Returns:
-            保存成功时返回输出文件路径，失败时返回 None。
-        """
-
-        try:
-            output_path = Path(output_file)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # 写文件和清理缓存期间持有状态锁，确保：
-            # 1. 不会漏掉正在 stop_trace 中新增的完成记录；
-            # 2. 保存成功后清空的就是当前这批记录。
-            with self._state_lock:
-                completed_traces = [
-                    trace_record
-                    for traces in self._completed_traces.values()
-                    for trace_record in traces
-                ]
-
-                data = {
-                    "schema_version": 1,
-                    "time_source": "pc_realtime",
-                    "trace_count": len(completed_traces),
-                    "traces": [
-                        self._serialize_trace_record(trace_record)
-                        for trace_record in completed_traces
-                    ],
-                }
-
-                # 先写临时文件，再替换正式文件，避免生成不完整 JSON。
-                temp_path = output_path.with_suffix(f"{output_path.suffix}.tmp")
-
-                temp_path.write_text(
-                    json.dumps(data, ensure_ascii=False, indent=2),
-                    encoding="utf-8",
-                )
-
-                temp_path.replace(output_path)
-
-                # 仅在文件写入成功后清空缓存。
-                self._completed_traces.clear()
-
-            self.logger.info(
-                "已完成 Trace 记录保存成功：count=%s, file=%s",
-                len(completed_traces),
-                output_path,
-            )
-
-            return output_path
-
-        except Exception:
-            self.logger.exception(
-                "已完成 Trace 记录保存失败，缓存已保留：file=%s",
-                output_file,
-            )
-            return None
-
-    @staticmethod
-    def _serialize_trace_record(trace_record: TraceRecord) -> dict[str, object]:
-        """序列化 trace_records.json 中的单条 trace 产物记录。
-
-        trace_records.json 只保存 trace 产物自身的信息；serial / round / case
-        这类上下文由报告加载阶段根据目录结构或 session_result.json 补齐。
-        """
-
-        trace_name = Path(trace_record.trace_path).name
-
-        return {
-            "trace_name": trace_name,
-            "trace_path": trace_record.trace_path,
-            "description": trace_record.description,
-            "start_time": trace_record.start_time,
-            "end_time": trace_record.end_time,
-            "duration_seconds": trace_record.duration_seconds,
-        }
+    def acknowledge_trace_records(self, serial: str, records: tuple[TraceRecord, ...]) -> None:
+        """只移除已成功持久化的快照，保留之后新完成的记录。"""
+        with self._state_lock:
+            remaining = list(self._completed_traces.get(serial, ()))
+            for record in records:
+                if record in remaining:
+                    remaining.remove(record)
+            if remaining:
+                self._completed_traces[serial] = remaining
+            else:
+                self._completed_traces.pop(serial, None)
 
     @contextmanager
     def collect(

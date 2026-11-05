@@ -7,18 +7,12 @@ from adbutils import AdbDevice
 
 
 class BaseCollector(ABC):
-    """最顶层的基类：只负责注册表、设备获取、路径构建等公共工具"""
+    """日志采集基础类：提供设备获取和路径构建等公共工具。"""
 
-    registry = {}
     name: str | None = None
 
     def __init__(self, logger=None):
         self.logger = logger or logging.getLogger("exfw." + self.__class__.__name__)
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        if cls.name:
-            BaseCollector.registry[cls.name] = cls
 
     def _get_device(self, device: str | AdbDevice) -> AdbDevice | None:
         try:

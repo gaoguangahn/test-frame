@@ -9,6 +9,7 @@ from pathlib import Path
 
 from exfw.pytest_framework.core.path import safe_path_name
 from ..data.data_models import DynamicReportTask
+from ..data.data_loader import iter_session_cases
 from .selection import JankCase
 
 
@@ -32,11 +33,13 @@ def _archive_device(task: DynamicReportTask, selected: set[JankCase]) -> None:
         for category in ("fluency", "animator"):
             (stage / category).mkdir()
         index: dict[tuple[int, str], list[dict]] = {}
-        for case in task.session_data.get("cases", []):
+        for case in iter_session_cases(task.session_data):
             if isinstance(case, dict):
                 index.setdefault((case.get("round"), case.get("case_name")), []).append(case)
         for item in sorted(selected, key=lambda x: (x.round, x.case, x.category)):
             matches = index.get((item.round, item.case), [])
+            if item.case_id:
+                matches = [case for case in matches if case.get("case_id") == item.case_id]
             if len(matches) != 1:
                 missing.append(f"round={item.round} case={item.case} category={item.category}：匹配到 {len(matches)} 个用例")
                 continue
@@ -53,9 +56,9 @@ def _archive_device(task: DynamicReportTask, selected: set[JankCase]) -> None:
             if not traces:
                 missing.append(f"round={item.round} case={item.case} category={item.category}：未找到 Trace")
             for trace in traces:
-                stem = safe_path_name(f"loop{item.round}_{item.case}_{trace.stem}", max_length=180)
-                target = stage / item.category / f"{stem}{trace.suffix}"
+                target = stage / item.category / trace.name
                 if target.exists():
+                    stem = safe_path_name(trace.stem, max_length=180)
                     digest = hashlib.sha256(str(trace).encode("utf-8")).hexdigest()[:10]
                     target = stage / item.category / f"{stem}_{digest}{trace.suffix}"
                     if target.exists():

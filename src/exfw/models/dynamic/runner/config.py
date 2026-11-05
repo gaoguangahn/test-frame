@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
+import re
 from typing import Any
 
-import yaml
+from exfw.project_config import load_project_config, resolve_project_path
 
 
 @dataclass(frozen=True)
@@ -33,7 +35,7 @@ def load_dynamic_runner_plan(
     """读取 project.yaml，生成动态模型 runner 执行计划。"""
 
     resolved_config_path = Path(config_path).expanduser().resolve()
-    project_config = _load_project_config(resolved_config_path)
+    project_config = load_project_config(resolved_config_path)
     project_root = resolved_config_path.parent
 
     runner_config = _load_runner_config(
@@ -48,39 +50,6 @@ def load_dynamic_runner_plan(
     )
 
     return runner_config, tasks
-
-
-def _load_project_config(path: Path) -> dict[str, Any]:
-    """读取 YAML 项目配置，避免 runner 入口依赖 pytest 插件包。"""
-
-    if not path.is_file():
-        raise FileNotFoundError(f"配置文件不存在：{path}")
-
-    with path.open("r", encoding="utf-8") as file:
-        data = yaml.safe_load(file) or {}
-
-    if not isinstance(data, dict):
-        raise TypeError("YAML 根节点必须是映射对象。")
-
-    testbeds = data.get("testbeds")
-    if testbeds is not None and not isinstance(testbeds, dict):
-        raise TypeError("配置中的 testbeds 必须是映射对象。")
-
-    return data
-
-
-def _resolve_project_path(project_root: Path, raw_path: str) -> Path:
-    normalized_path = raw_path.strip()
-
-    if not normalized_path:
-        raise ValueError("路径不能为空。")
-
-    candidate = Path(normalized_path).expanduser()
-
-    if candidate.is_absolute():
-        return candidate.resolve()
-
-    return (project_root / candidate).resolve()
 
 
 def _load_runner_config(
@@ -112,6 +81,12 @@ def _load_runner_config(
     if not isinstance(raw_output_dir, str) or not raw_output_dir.strip():
         raise ValueError("必须配置 test_models.dynamic_model.runner.output_dir。")
 
+    test_name = runner_config.get("test_name")
+    if (not isinstance(test_name, str) or not test_name.strip()
+            or test_name != test_name.strip() or re.search(r'[<>:"/\\|?*\x00-\x1f]', test_name)
+            or test_name in (".", "..") or test_name.endswith(".")):
+        raise ValueError("test_models.dynamic_model.runner.test_name 必须是有效的目录名称。")
+
     rounds = runner_config.get("rounds")
     if rounds is not None:
         if not isinstance(rounds, int) or rounds < 1:
@@ -120,8 +95,8 @@ def _load_runner_config(
     return DynamicRunnerConfig(
         config_path=config_path,
         project_root=project_root,
-        test_path=_resolve_project_path(project_root, raw_test_path),
-        output_dir=_resolve_project_path(project_root, raw_output_dir),
+        test_path=resolve_project_path(project_root, raw_test_path),
+        output_dir=resolve_project_path(project_root, raw_output_dir) / f"{test_name}_{datetime.now():%Y%m%d_%H%M%S}",
         rounds=rounds,
     )
 

@@ -1,3 +1,5 @@
+"""通用持续命令采集：明确暴露启动失败并负责释放进程和文件。"""
+
 import atexit
 import logging
 import os
@@ -21,7 +23,9 @@ class CmdRunner:
 
     def start(self):
         """启动日志采集（直接写入电脑本地）"""
-        os.makedirs(os.path.dirname(self.output_path), exist_ok=True)
+        if self.proc is not None:
+            raise RuntimeError(f"采集进程已经启动：{self.name}")
+        os.makedirs(os.path.dirname(self.output_path) or ".", exist_ok=True)
 
         try:
             self.file = open(self.output_path, "wb")
@@ -35,27 +39,26 @@ class CmdRunner:
         except Exception as e:
             self.logger.error(f"Start {self.name} failed: {e}")
             self._close_file()
+            raise
 
     def stop(self):
         """停止日志采集"""
         if not self.proc:
             return
 
-        # 1. 终止子进程
-        self.proc.terminate()
         try:
-            self.proc.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            self.proc.kill()
-            self.proc.wait(timeout=1)
-        self.proc = None
-
-        # 2. 关闭本地文件
-        self._close_file()
-
-        # 3. 从全局清理列表中移除
-        if self in CmdRunner._procs:
-            CmdRunner._procs.remove(self)
+            if self.proc.poll() is None:
+                self.proc.terminate()
+            try:
+                self.proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+                self.proc.wait(timeout=1)
+        finally:
+            self.proc = None
+            self._close_file()
+            if self in CmdRunner._procs:
+                CmdRunner._procs.remove(self)
 
         self.logger.debug(f"Stop {self.name} finished")
 

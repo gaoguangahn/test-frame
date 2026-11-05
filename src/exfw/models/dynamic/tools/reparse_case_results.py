@@ -16,7 +16,8 @@ from exfw.models.dynamic.analyse.log_parser_dispatcher import LogParserDispatche
 from exfw.models.dynamic.analyse.trace_parser_dispatcher import TraceParserDispatcher
 from exfw.models.dynamic.report.data.data_loader import (
     discover_runner_report_tasks,
-    load_runner_result,
+    iter_session_cases,
+    load_task_result,
     normalize_serial_filter,
 )
 from exfw.models.dynamic.server_config import CASE_RESULT_SERVER
@@ -26,7 +27,7 @@ LOGGER = logging.getLogger("exfw.dynamic.reparse_case_results")
 
 @dataclass(frozen=True)
 class ReparseCaseItem:
-    task_id: str
+    task_id: str | None
     serial: str | None
     round: int | None
     case_name: str
@@ -180,6 +181,11 @@ class HistoricalCaseReparser:
             item_summary["errors"].append("server check/upload requires client")
             return item_summary
 
+        if not item.task_id:
+            item_summary["status"] = "failed_no_task_id"
+            item_summary["errors"].append("server check/upload requires a task ID")
+            return item_summary
+
         try:
             records = self.client.list_case_results(
                 task_id=item.task_id,
@@ -252,21 +258,18 @@ def iter_reparse_cases(
     round_filter: int | None,
     case_filter: set[str] | None,
 ) -> list[ReparseCaseItem]:
-    runner_result = load_runner_result(runner_output_dir)
+    runner_result = load_task_result(runner_output_dir)
     tasks = discover_runner_report_tasks(
         runner_output_dir=runner_output_dir,
         runner_result=runner_result,
         serial_filter=serial_filter,
+        require_task_id=False,
     )
 
     items: list[ReparseCaseItem] = []
 
     for task in tasks:
-        cases = task.session_data.get("cases") or []
-        if not isinstance(cases, list):
-            continue
-
-        for case in cases:
+        for case in iter_session_cases(task.session_data):
             if not isinstance(case, dict):
                 continue
 

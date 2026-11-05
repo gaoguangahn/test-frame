@@ -3,12 +3,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from exfw.models.dynamic.result import CaseResultReporter
+from exfw.models.dynamic.result import DynamicResultProcessor
 from exfw.pytest_framework.core.artifacts import build_run_artifact_dir
 from exfw.pytest_framework.core.runtime import DeviceSpec
 from exfw.pytest_framework.rounds.tasks import RoundContext
 
-from .capture_service import DynamicModelCaptureService
+from exfw.models.dynamic.capture.service import DynamicModelCaptureService
 
 
 class DynamicModelRoundCaptureTask:
@@ -17,7 +17,7 @@ class DynamicModelRoundCaptureTask:
     def __init__(
         self,
         capture_service: DynamicModelCaptureService,
-        case_result_reporter: CaseResultReporter | None,
+        case_result_reporter: DynamicResultProcessor | None,
         task_id: str | None,
     ) -> None:
         self._capture_service = capture_service
@@ -65,6 +65,7 @@ class DynamicModelRoundCaptureTask:
                 log_path=logs_dir,
                 trace_path=None,
                 brand=getattr(device_spec, "brand", "Honor"),
+                capture_status=self._capture_service.last_round_results.get((context.round_no, device_spec.serial)),
             )
 
         except Exception:

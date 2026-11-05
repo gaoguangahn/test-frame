@@ -10,12 +10,13 @@ import pytest
 from exfw.aw.device import AdbDriver
 from exfw.aw.keyboard import Keyboard
 from exfw.pytest_framework import BaseTestCase, Step
+from exfw.pytest_framework.result.store import get_session_result_store
 
 from .action_stats import ActionStatsRecorder, instrument_device_actions
 from .dynamic_pytest.config import DynamicModelConfig
 from .services.page_verify import PopupWaiter
 from .services.popup_handler import DynamicPopupHandler
-from .services.trace_collector import DynamicTraceCollector
+from .capture.trace import DynamicTraceCollector
 
 
 class DynamicCase(BaseTestCase):
@@ -42,6 +43,7 @@ class DynamicCase(BaseTestCase):
         devices,
         dynamic_upload_context: dict[str, Any],
         dynamic_model_config: DynamicModelConfig,
+        dynamic_capture_service,
         keyboard_factory: Callable[[Any], Keyboard],
         dynamic_pre_case_recovery: None,
     ) -> Generator[None, None, None]:
@@ -64,8 +66,7 @@ class DynamicCase(BaseTestCase):
             self.device = raw_device
             self.dynamic_upload_context = dynamic_upload_context
             self.dynamic_model_config = dynamic_model_config
-            self.tracer = DynamicTraceCollector(
-                collector=self.trace_collector,
+            self.tracer = dynamic_capture_service.create_tracer(
                 case_name=request.node.name,
                 round_no=self.current_round,
             )
@@ -87,7 +88,10 @@ class DynamicCase(BaseTestCase):
 
                 action_stats = self.action_stats.snapshot()
                 dynamic_upload_context["action_stats"] = action_stats
-                setattr(request.node, "_exfw_action_stats", action_stats)
+                get_session_result_store(request.config).update_case_extension(
+                    self.current_round, self.case_artifacts.case_id, request.node.nodeid,
+                    "dynamic_model", {"action_stats": action_stats},
+                )
 
     def step(
         self, description: str, *, screenshot: bool | None = None, **extra: Any

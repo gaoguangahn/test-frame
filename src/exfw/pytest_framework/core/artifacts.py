@@ -14,7 +14,6 @@ class CaseArtifacts:
     root_dir: Path
     run_dir: Path
     case_dir: Path
-    result_file: Path
     round_no: int
     case_id: str
 
@@ -52,7 +51,6 @@ def build_case_artifacts(
         root_dir=output_dir,
         run_dir=run_dir,
         case_dir=case_dir,
-        result_file=case_dir / "result.json",
         round_no=round_no,
         case_id=case_id,
     )

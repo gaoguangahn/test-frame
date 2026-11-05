@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import time
 from pathlib import Path
 from typing import Any
@@ -13,9 +12,8 @@ from exfw.pytest_framework.core.runtime import (
     EXFW_RUN_CONFIG_KEY,
     RunConfig,
 )
-from exfw.pytest_framework.core.session_result import (
-    get_or_create_session_result_collector,
-)
+from exfw.pytest_framework.result.models import CaseResult
+from exfw.pytest_framework.result.store import get_session_result_store
 from exfw.pytest_framework.core.time_context import (
     CaseTimeContext,
     get_case_time_context,
@@ -66,13 +64,7 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
         case_dir=case_artifacts.case_dir,
     )
 
-    case_artifacts.result_file.write_text(
-        json.dumps(result, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-    if report.when == "teardown" or report.when == "setup":
-        get_or_create_session_result_collector(config).add_case(result)
+    get_session_result_store(config).set_case(current_round, result)
 
 
 def _should_write_result(report: pytest.TestReport) -> bool:
@@ -101,7 +93,7 @@ def _build_case_result(
     round_no: int,
     case_id: str,
     case_dir: Path,
-) -> dict[str, Any]:
+) -> CaseResult:
     """构建可落盘的单用例结果。"""
     final_report = _select_final_report(phase_reports)
 
@@ -116,34 +108,23 @@ def _build_case_result(
         steps = dict(getattr(final_report, "user_properties", [])).get("exfw_steps", [])
 
     steps = _convert_steps_timestamps(steps, time_context)
-    action_stats = getattr(item, "_exfw_action_stats", {})
-
-    result = {
-        "nodeid": final_report.nodeid,
-        "case_id": case_id,
-        "case_name": final_report.nodeid.split("::")[-1],
-        "round": round_no,
-        "outcome": final_report.outcome,
-        "passed": final_report.passed,
-        "failed": final_report.failed,
-        "skipped": final_report.skipped,
-        "duration": duration,
-        "started_at": _convert_timestamp(started_at, time_context),
-        "stopped_at": _convert_timestamp(stopped_at, time_context),
-        "longrepr": _longrepr_text(final_report),
-        "steps": steps,
-        "action_stats": action_stats,
-        "artifacts": _build_artifacts_index(
+    return CaseResult(
+        nodeid=final_report.nodeid,
+        case_id=case_id,
+        case_name=final_report.nodeid.split("::")[-1],
+        outcome=final_report.outcome,
+        duration=duration,
+        started_at=_convert_timestamp(started_at, time_context),
+        stopped_at=_convert_timestamp(stopped_at, time_context),
+        longrepr=_longrepr_text(final_report),
+        steps=steps,
+        artifacts=_build_artifacts_index(
             output_dir=run_config.output_dir,
             case_dir=case_dir,
         ),
-    }
-
-    if time_context is not None:
-        result["time_source"] = time_context.time_source
-        result["time_context"] = time_context.to_dict()
-
-    return result
+        time_source=time_context.time_source if time_context is not None else None,
+        time_context=time_context.to_dict() if time_context is not None else None,
+    )
 
 
 def _convert_timestamp(
@@ -194,7 +175,6 @@ def _build_artifacts_index(*, output_dir: Path, case_dir: Path) -> dict[str, str
 
     return {
         "case_dir": str(relative_case_dir),
-        "result_file": str(relative_case_dir / "result.json"),
         "logs_dir": str(relative_case_dir / "logs"),
         "traces_dir": str(relative_case_dir / "traces"),
         "pictures_dir": str(relative_case_dir / "pictures"),
