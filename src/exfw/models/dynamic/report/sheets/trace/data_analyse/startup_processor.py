@@ -2,7 +2,12 @@ from collections import defaultdict
 import numpy as np
 
 from ....utils.report_util import safe_int
+from ..thread_states import THREAD_STATE_COLUMNS
 from .trace_context import build_trace_record_index, lookup_trace_description
+
+
+SPEND_METRIC_NAMES = ["SpendTime", *THREAD_STATE_COLUMNS]
+START_TYPE_GROUPS = ("all", "cold", "warm", "hot")
 
 
 def process_all_startup_data(startup_data, app_map, test_info=None):
@@ -30,6 +35,7 @@ def process_all_startup_data(startup_data, app_map, test_info=None):
             "state_columns": state_columns,
             "response_summary": response_summary,
             "spend_summary": spend_summary,
+            "spend_type_summary": _process_spend_type_summary(detail_data, app_map),
             "spend_package_summary": spend_package_summary,
         },
         "summary_data": {
@@ -44,7 +50,7 @@ def _process_detail(startup_data, trace_record_index):
     """处理启动详情页数据。"""
 
     detail_rows = []
-    state_columns = []
+    state_columns = list(THREAD_STATE_COLUMNS)
 
     for item in filter(None, startup_data):
         scene = lookup_trace_description(item, trace_record_index)
@@ -150,15 +156,8 @@ def _process_spend_summary(detail_data, app_map):
     spend_values = {"cold": [], "warm": [], "hot": [], "unknown": []}
     group_stats = []
 
-    state_names = [
-        "running_dur_ns",
-        "runnable_dur_ns",
-        "uninterruptible_sleep_dur_ns",
-        "interruptible_sleep_dur_ns",
-        "uninterruptible_io_sleep_dur_ns",
-        "uninterruptible_non_io_sleep_dur_ns",
-    ]
-    metric_names = ["SpendTime"] + state_names
+    state_names = THREAD_STATE_COLUMNS
+    metric_names = SPEND_METRIC_NAMES
 
     for detail_row in detail_data:
         package = detail_row["Package"]
@@ -180,7 +179,20 @@ def _process_spend_summary(detail_data, app_map):
                 if metric_name in state_names:
                     states_values[metric_name].append(metric_value)
 
-    statistics = ["Count", "Avg", "Std", "Min", "Max", "25%", "50%", "75%"]
+    for (package, activity), metric_values in grouped_values.items():
+        for statistics in _calculate_spend_statistics(metric_values):
+            group_stats.append({
+                "Application": app_map.get(package, "UNKNOWN"),
+                "Package": package,
+                "Activity": activity,
+                **statistics,
+            })
+
+    return group_stats, spend_values, states_values
+
+
+def _calculate_spend_statistics(metric_values):
+    """第 3 和 3.1 页共享统计口径，线程状态在详情阶段已转换为毫秒。"""
     stat_funcs = {
         "Count": len,
         "Avg": lambda values: round(np.mean(values), 2),
@@ -194,22 +206,53 @@ def _process_spend_summary(detail_data, app_map):
         "75%": lambda values: round(np.percentile(values, 75), 2),
     }
 
-    for (package, activity), metric_values in grouped_values.items():
-        for statistic in statistics:
-            stat_record = {
-                "Application": app_map.get(package, "UNKNOWN"),
-                "Package": package,
-                "Activity": activity,
-                "statistics": statistic,
-            }
-            for metric_name in metric_names:
-                data_array = np.array(metric_values.get(metric_name, []))
-                stat_record[metric_name] = (
-                    stat_funcs[statistic](data_array) if len(data_array) > 0 else "-"
-                )
-            group_stats.append(stat_record)
+    rows = []
+    for statistic, calculate in stat_funcs.items():
+        row = {"statistics": statistic}
+        for metric_name in SPEND_METRIC_NAMES:
+            values = np.array(metric_values.get(metric_name, []))
+            if len(values):
+                row[metric_name] = calculate(values)
+            else:
+                row[metric_name] = "-"
+        rows.append(row)
+    return rows
 
-    return group_stats, spend_values, states_values
+
+def _process_spend_type_summary(detail_data, app_map):
+    """按实际有有效指标的启动类型细分；all 包含未知类型的数据。"""
+    grouped_values = {}
+    for detail_row in detail_data:
+        key = (detail_row["Package"], detail_row["Activity"])
+        start_type = str(detail_row.get("StartType", "")).strip().lower()
+        for metric_name in SPEND_METRIC_NAMES:
+            value = detail_row.get(metric_name)
+            if not isinstance(value, int):
+                continue
+            if key not in grouped_values:
+                grouped_values[key] = {
+                    group: defaultdict(list) for group in START_TYPE_GROUPS
+                }
+            groups = grouped_values[key]
+            groups["all"][metric_name].append(value)
+            if start_type in ("cold", "warm", "hot"):
+                groups[start_type][metric_name].append(value)
+
+    rows = []
+    for (package, activity), groups in grouped_values.items():
+        for start_type in START_TYPE_GROUPS:
+            metric_values = groups[start_type]
+            if not metric_values:
+                continue
+            for statistics in _calculate_spend_statistics(metric_values):
+                rows.append({
+                    "Application": app_map.get(package, "UNKNOWN"),
+                    "Package": package,
+                    "Activity": activity,
+                    "StartType": start_type,
+                    **statistics,
+                })
+    return rows
 
 
 def _process_spend_package_summary(detail_data, app_map):

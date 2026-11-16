@@ -41,6 +41,29 @@ def test_summary_uses_session_failures_and_shows_abnormal_exit(tmp_path):
     assert "pytest 任务退出状态: 2" in text
 
 
+def test_final_summary_keeps_live_failures_even_when_session_results_are_incomplete(tmp_path):
+    stream = io.StringIO()
+    terminal = Terminal([SimpleNamespace(main_serial="A"), SimpleNamespace(main_serial="B")], stream)
+    terminal.refresh = True
+    for serial, round_no, nodeid in [("A", 1, "test_bad"), ("A", 2, "test_bad"), ("B", 1, "test_other")]:
+        terminal.event(serial, {"event": "finish", "round": round_no, "nodeid": nodeid, "outcome": "FAILED"})
+
+    (tmp_path / "A").mkdir()
+    (tmp_path / "A" / "session_result.json").write_text(json.dumps({
+        "summary": {"failed": 1},
+        "rounds": [{"round": 1, "cases": [{"nodeid": "test_bad", "outcome": "failed"}]}],
+    }), encoding="utf-8")
+    terminal.summary([{"main_serial": serial, "output_dir": serial, "exit_code": 1}
+                      for serial in ("A", "B")], tmp_path)
+    terminal.render()
+    summary = stream.getvalue().split("测试汇总", 1)[1]
+    assert summary.count("第 1 轮  test_bad") == 1
+    assert "第 2 轮  test_bad" in summary
+    assert "第 1 轮  test_other" in summary
+    assert "失败 2" in summary
+    assert "\x1b" not in summary
+
+
 def test_pytest_events_and_native_failure_report(tmp_path):
     (tmp_path / "project.yaml").write_text("runtime:\n  resources_dir: .\n", encoding="utf-8")
     (tmp_path / "conftest.py").write_text('pytest_plugins = ["exfw.pytest_framework.plugin"]\n', encoding="utf-8")

@@ -1,3 +1,6 @@
+from .thread_states import THREAD_STATE_COLUMNS
+
+
 class TraceStartupSheet:
     """专门处理报表生成的类"""
 
@@ -16,6 +19,7 @@ class TraceStartupSheet:
         )
         self.create_response_summary(sheets_data.get("response_summary", []))
         self.create_spend_summary(sheets_data.get("spend_summary", []))
+        self.create_spend_type_summary(sheets_data.get("spend_type_summary", []))
         self.create_spend_package_summary(sheets_data.get("spend_package_summary", []))
 
     def create_detail_sheet(self, data_input, state_columns):
@@ -64,16 +68,27 @@ class TraceStartupSheet:
                 "Activity",
                 "statistics",
                 "SpendTime",
-                "running_dur_ns",
-                "runnable_dur_ns",
-                "uninterruptible_sleep_dur_ns",
-                "interruptible_sleep_dur_ns",
-                "uninterruptible_io_sleep_dur_ns",
-                "uninterruptible_non_io_sleep_dur_ns",
+                *THREAD_STATE_COLUMNS,
             ]
         }
         self.excel.add_sheet(titles, data_input, merge_cols=[1, 2, 3])
         print("3.trace启动耗时汇总页 已生成")
+
+    def create_spend_type_summary(self, data_input):
+        """在 Activity 下按 all/cold/warm/hot 展示与第 3 页相同的指标。"""
+        titles = {
+            "3.1.trace启动耗时(启动类型)汇总页": [
+                "Application",
+                "Package",
+                "Activity",
+                "StartType",
+                "statistics",
+                "SpendTime",
+                *THREAD_STATE_COLUMNS,
+            ]
+        }
+        self.excel.add_sheet(titles, data_input, merge_cols=[1, 2, 3, 4])
+        print("3.1.trace启动耗时(启动类型)汇总页 已生成")
 
     def create_spend_package_summary(self, data_input):
         titles = {

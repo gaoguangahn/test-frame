@@ -1,3 +1,6 @@
+from .thread_states import THREAD_STATE_COLUMNS
+
+
 class TraceAppClickSheet:
     """专门处理报表生成的类"""
 
@@ -40,12 +43,7 @@ class TraceAppClickSheet:
                 "Activity",
                 "statistics",
                 "dur",
-                "running_dur_ns",
-                "runnable_dur_ns",
-                "uninterruptible_sleep_dur_ns",
-                "interruptible_sleep_dur_ns",
-                "uninterruptible_io_sleep_dur_ns",
-                "uninterruptible_non_io_sleep_dur_ns",
+                *THREAD_STATE_COLUMNS,
             ]
         }
         self.excel.add_sheet(titles, input_data, merge_cols=[1, 2, 3, 4])

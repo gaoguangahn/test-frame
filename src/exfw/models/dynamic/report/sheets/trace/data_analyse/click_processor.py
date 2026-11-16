@@ -3,6 +3,7 @@ from collections import defaultdict
 import numpy as np
 
 from ....utils.report_util import safe_int
+from ..thread_states import THREAD_STATE_COLUMNS
 from .trace_context import build_trace_record_index, lookup_trace_description
 
 
@@ -36,7 +37,7 @@ def _process_click_detail(click_transition, trace_record_index):
     """处理应用内点击响应详情页数据。"""
 
     detail_rows = []
-    state_columns = []
+    state_columns = list(THREAD_STATE_COLUMNS)
 
     for record in filter(None, click_transition):
         response_time = safe_int(record.get("response_time"))
@@ -79,15 +80,8 @@ def _process_click_summary(detail_data):
     spend_values = {"cold": [], "warm": [], "hot": [], "unknown": []}
     summary_rows = []
 
-    state_names = [
-        "running_dur_ns",
-        "runnable_dur_ns",
-        "uninterruptible_sleep_dur_ns",
-        "interruptible_sleep_dur_ns",
-        "uninterruptible_io_sleep_dur_ns",
-        "uninterruptible_non_io_sleep_dur_ns",
-    ]
-    metric_names = ["dur"] + state_names
+    state_names = THREAD_STATE_COLUMNS
+    metric_names = ["dur", *state_names]
 
     for detail_row in detail_data:
         package = detail_row.get("Package", "UNKNOWN")

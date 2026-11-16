@@ -128,17 +128,25 @@ class Terminal:
         self._lines = len(lines)
 
     def summary(self, results, output_dir):
+        # 汇总开始后，进度区留在终端历史中，不再回移光标。
+        self.refresh = False
         print("\n================ 测试汇总 ================", file=self.stream)
         for result in results:
             serial = result["main_serial"]
+            state = self.states[serial]
+            # 进度事件已经确认的失败，即使没写入 session 也应列出。
+            failed_cases = dict.fromkeys(state.failures)
             task_dir = Path(output_dir) / result["output_dir"]
             try:
                 data = json.loads((task_dir / "session_result.json").read_text(encoding="utf-8"))
                 summary = data.get("summary") or {}
-                cases = [(r.get("round"), case) for r in data.get("rounds", []) for case in r.get("cases", []) if case.get("outcome") == "failed"]
-                print(f"设备 {serial}  通过 {summary.get('passed', 0)}  失败 {summary.get('failed', 0)}  跳过 {summary.get('skipped', 0)}", file=self.stream)
-                for round_no, case in cases:
-                    print(f"  第 {round_no} 轮  {case.get('nodeid', case.get('case_name', '?'))}", file=self.stream)
+                for round_data in data.get("rounds", []):
+                    for case in round_data.get("cases", []):
+                        if case.get("outcome") == "failed":
+                            nodeid = case.get("nodeid") or case.get("case_name") or "?"
+                            failed_cases[(round_data.get("round"), nodeid)] = None
+                failed_count = max(summary.get("failed", 0), len(failed_cases))
+                print(f"设备 {serial}  通过 {summary.get('passed', 0)}  失败 {failed_count}  跳过 {summary.get('skipped', 0)}", file=self.stream)
                 processing = data.get("extensions", {}).get("dynamic_model", {}).get("processing", {})
                 for phase in ("capture", "analysis", "upload"):
                     counts = processing.get(phase, {})
@@ -148,7 +156,11 @@ class Terminal:
                     print("  解析或上传收尾异常，请查看运行日志", file=self.stream)
             except (OSError, ValueError, TypeError, AttributeError):
                 print(f"设备 {serial}  无法读取 session 结果", file=self.stream)
+            if failed_cases:
+                print("  失败用例", file=self.stream)
+                for round_no, nodeid in failed_cases:
+                    print(f"  第 {round_no} 轮  {nodeid}", file=self.stream)
             if result["exit_code"]:
-                label = "pytest 退出状态" if result.get("status") == "failed" and self.states[serial].failed else "pytest 任务退出状态"
+                label = "pytest 退出状态" if result.get("status") == "failed" and failed_cases else "pytest 任务退出状态"
                 print(f"  {label}: {result['exit_code']}；详情: {task_dir / 'pytest-output.log'}", file=self.stream)
         self.stream.flush()
